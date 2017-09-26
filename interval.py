@@ -15,6 +15,7 @@ interval 모듈
 
 import time
 import random
+import queue
 
 PUBLIC_KEY_INTERVAL = 15  # 단위:초
 PRIVATE_KEY_INTERVAL = 0
@@ -40,6 +41,8 @@ class Interval:
 
         # 생성시 기본 인터벌 설정(단위:초), 기본 1분에 4개
         self.interval = interval
+        # 키 오브젝트를 저장할 큐
+        self.objectqueue = queue.Queue(50)
 
         # default 값에 따라 초기시간 설정
         if default:
@@ -52,6 +55,10 @@ class Interval:
         for _object in objects:
             self.objects[_object] = _lastUsed  # 오브젝트들은 가장 최근 사용된 시간을 갖고있다.
 
+        # 큐에 키 값들을 랜덤으로 저장한다.
+        for obj in random.sample(list(self.objects), len(self.objects)):
+            self.objectqueue.put(obj, True)
+
     def pick(self):
         """사용이 가능해진 오브젝트를 리턴한다
 
@@ -59,17 +66,17 @@ class Interval:
         :rtype: any
         """
 
-        # 랜덤한 오브젝트 선정
-        _randomObject = random.choice(list(self.objects))
+        # 가장 최근의 오브젝트 선정
+        _randomObject = self.objectqueue.get(True)
 
         # 과거 호출시점 기준, 현재 호출시점이 interval 을 넘길때까지
         while (time.time() - self.objects[_randomObject]) < self.interval:  # self.objects 에는 각 오브젝트의 최근 접근 시간이 담겨있다
             # CPU 자원소모 방지
             time.sleep(1)
-            # 다시 선정
-            _randomObject = random.choice(list(self.objects))  # TODO: 선정시까지 hanging 문제 있음, 쓰레드로 처리할것
 
         # 선정이 완료된 오브젝트 호출시점 초기화
         self.objects[_randomObject] = time.time()
+        self.objectqueue.put(_randomObject, True)
+        self.objectqueue.task_done()
 
         return _randomObject
